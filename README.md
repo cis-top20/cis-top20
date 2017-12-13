@@ -21,3 +21,13 @@ Milestones
 - Do an automated rebalancing
 - Profit $$$$$$
 
+
+v0.1.0
+======
+
+usage
+-----
+```
+pip install -r requirements.txt
+python3 compute_weights.py
+```
