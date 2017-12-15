@@ -4,7 +4,7 @@ coinmarketcap==4.1.1
 idna==2.6
 numpy==1.13.3
 pandas==0.21.0
-python-bittrex==0.2.1
+python-bittrex==0.2.2
 python-dateutil==2.6.1
 pytz==2017.3
 requests==2.18.4
