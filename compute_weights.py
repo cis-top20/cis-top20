@@ -34,4 +34,4 @@ df['weight'] = df['market_cap_usd']/df['market_cap_usd'].sum()
 # compute capped weights
 capped = capping(df, 0.1, weight_column='weight')
 
-print(capped.loc[:, ['name', 'weight']])
+print(capped.loc[:, ['symbol', 'name', 'weight']])
