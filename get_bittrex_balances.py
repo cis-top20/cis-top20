@@ -14,24 +14,33 @@ v2_bittrex = Bittrex(
 
 balances = v2_bittrex.get_balances()
 
-balances_df = pd.DataFrame(
-    [
-        [
+balance_list = []
+for b in balances['result']:
+    if b['Balance']['Balance'] > 0:
+        coin = [
             b['Balance']['Currency'],
             b['Balance']['Available'],
-            b['Balance']['Balance'],
-            b['BitcoinMarket']['Last'] * b['Balance']['Balance'],
-        ] for b in balances['result']
-        if b['Balance']['Balance'] > 0 and b['BitcoinMarket']
-    ],
-    columns=['currency', 'available', 'balance', 'BTC_value']
-)
+            b['Balance']['Balance']
+        ]
+        if b['BitcoinMarket']:
+            coin.append(b['BitcoinMarket']['Last'] * b['Balance']['Balance'])
+        else:
+            coin.append(b['Balance']['Balance'])
+        balance_list.append(coin)
+
+balance_df = pd.DataFrame(
+    balance_list, columns=['currency', 'available', 'balance', 'BTC_value'])
 
 btc_usd = v1_bittrex.get_ticker('USDT-BTC')['result']['Last']
-balances_df['USD_value'] = balances_df['BTC_value'] * btc_usd
+balance_df['USD_value'] = balance_df['BTC_value'] * btc_usd
 
-print(balances_df.sort_values(by='BTC_value', ascending=False))
+total_btc = balance_df['BTC_value'].sum()
+total_usd = balance_df['USD_value'].sum()
+
+balance_df['weight'] = balance_df['BTC_value'] / total_btc
+
+print(balance_df.sort_values(by='BTC_value', ascending=False))
 print()
 print('TOTAL PORTFOLIO')
-print('BTC:', balances_df['BTC_value'].sum())
-print('USD:', balances_df['USD_value'].sum())
+print('BTC:', total_btc)
+print('USD:', total_usd)
