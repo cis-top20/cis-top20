@@ -52,7 +52,8 @@ class BittrexPortfolio(object):
             self.BITTREX_API_KEY,
             self.BITTREX_API_SECRET,
             api_version=API_V2_0)
-        self.blacklist = pd.Series(['BCC', 'USDT'])
+        # remove BCC, it's BitcoinCash in Bittrex ??
+        self.blacklist = pd.Series(['USDT', 'BCC'])
         self.n_coins = n_coins
         self.cap = cap
 
@@ -93,6 +94,8 @@ class BittrexPortfolio(object):
 
         df = df.head(self.n_coins)
 
+        df['symbol'] = df['symbol'].apply(lambda x: x if x != 'BCH' else 'BCC')
+
         # compute market weights
         df['market_cap_usd'] = df['market_cap_usd'].astype(float)
         df['weight'] = df['market_cap_usd']/df['market_cap_usd'].sum()
@@ -100,3 +103,12 @@ class BittrexPortfolio(object):
         # compute capped weights
         capped = capping(df, self.cap, weight_column='weight')
         return capped[['symbol', 'weight']].set_index('symbol')
+
+    def get_weight_diffs(self):
+        bal = self.get_balances()
+        cap = self.get_capping()
+        df = pd.concat([bal, cap], axis=1)
+        df['current_weight'].fillna(0, inplace=True)
+        df['weight'].fillna(0, inplace=True)
+        df['weight_diff'] = df['weight'] - df['current_weight']
+        return df.sort_values(by='weight', ascending=False)
