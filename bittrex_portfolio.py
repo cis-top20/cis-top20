@@ -43,7 +43,7 @@ def get_balance_df(balance_list, btc_usd_price=None):
 class BittrexPortfolio(object):
     """docstring for BittrexPortfolio."""
 
-    def __init__(self, n_coins=20, cap=0.1):
+    def __init__(self, n_coins=20, cap=0.1, limit=50):
         self.coinmarketcap = Market()
         self.BITTREX_API_KEY = os.getenv('BITTREX_API_KEY')
         self.BITTREX_API_SECRET = os.getenv('BITTREX_API_SECRET')
@@ -52,37 +52,65 @@ class BittrexPortfolio(object):
             self.BITTREX_API_KEY,
             self.BITTREX_API_SECRET,
             api_version=API_V2_0)
-        # remove BCC, it's BitcoinCash in Bittrex ??
         self.blacklist = pd.Series(['USDT', 'BCC'])
         self.n_coins = n_coins
         self.cap = cap
+        self.limit = limit
 
-    def get_balances(self):
+    def get_market_data(self):
+        return self.coinmarketcap.ticker(limit=self.limit)
+
+    def get_bittrex_markets(self):
+        return self.v1_bittrex.get_markets()['result']
+
+    def get_bittrex_balances(self):
+        return self.v2_bittrex.get_balances()
+
+    def get_btc_usd(self):
+        return self.v1_bittrex.get_ticker('USDT-BTC')['result']['Last']
+
+    def get_balances(self, bittrex_balances=None, btc_usd=None):
         """Returns a DataFrame with all available balances."""
-        balances = self.v2_bittrex.get_balances()
-        balance_list = get_balance_list(balances)
-        btc_usd = self.v1_bittrex.get_ticker('USDT-BTC')['result']['Last']
+        if not bittrex_balances:
+            bittrex_balances = self.v2_bittrex.get_balances()
+        if not btc_usd:
+            btc_usd = self.get_btc_usd()
+
+        balance_list = get_balance_list(bittrex_balances)
         balance_df = get_balance_df(balance_list, btc_usd_price=btc_usd)
 
         return balance_df
 
-    def get_usd_value(self):
+    def get_usd_value(self, bittrex_balances=None, btc_usd=None):
         """Returns total portfolio value in USD."""
-        balances = self.v2_bittrex.get_balances()
-        balance_list = get_balance_list(balances)
-        btc_usd = self.v1_bittrex.get_ticker('USDT-BTC')['result']['Last']
-        return get_balance_df(balance_list, btc_usd)['USD_value'].sum()
+        if not bittrex_balances:
+            bittrex_balances = self.get_bittrex_balances()
+        if not btc_usd:
+            btc_usd = self.get_btc_usd()
 
-    def get_btc_value(self):
+        balance_df = self.get_balances(
+            bittrex_balances=bittrex_balances,
+            btc_usd=btc_usd)
+
+        return balance_df['USD_value'].sum()
+
+    def get_btc_value(self, bittrex_balances=None):
         """Returns total portfolio value in BTC."""
-        balances = self.v2_bittrex.get_balances()
-        balance_list = get_balance_list(balances)
-        return get_balance_df(balance_list)['BTC_value'].sum()
+        if not bittrex_balances:
+            bittrex_balances = self.v2_bittrex.get_balances()
 
-    def get_capping(self):
+        balance_df = self.get_balances(bittrex_balances=bittrex_balances)
+
+        return balance_df['BTC_value'].sum()
+
+    def get_capping(self, market_data=None, bittrex_markets=None):
         """Returns portfolio capping objective."""
-        market_data = self.coinmarketcap.ticker(limit=50)
-        bittrex_markets = pd.DataFrame(self.v1_bittrex.get_markets()['result'])
+        if not market_data:
+            market_data = self.get_market_data()
+        if not bittrex_markets:
+            bittrex_markets = self.get_bittrex_markets()
+
+        bittrex_markets = pd.DataFrame(bittrex_markets)
         bittrex_coins = bittrex_markets.loc[
             bittrex_markets['BaseCurrency'] == 'BTC']['MarketCurrency']
         bittrex_coins = bittrex_coins.append(pd.Series('BTC'))
@@ -94,6 +122,7 @@ class BittrexPortfolio(object):
 
         df = df.head(self.n_coins)
 
+        # TODO: create a mapping of the coin symbols somewhere
         df['symbol'] = df['symbol'].apply(lambda x: x if x != 'BCH' else 'BCC')
 
         # compute market weights
@@ -104,11 +133,37 @@ class BittrexPortfolio(object):
         capped = capping(df, self.cap, weight_column='weight')
         return capped[['symbol', 'weight']].set_index('symbol')
 
-    def get_weight_diffs(self):
-        bal = self.get_balances()
-        cap = self.get_capping()
+    def check_rebalancing(
+            self, bittrex_balances=None, btc_usd=None,
+            market_data=None, bittrex_markets=None):
+        if not bittrex_balances:
+            bittrex_balances = self.get_bittrex_balances()
+        if not btc_usd:
+            btc_usd = self.get_btc_usd()
+        if not market_data:
+            market_data = self.get_market_data()
+        if not bittrex_markets:
+            bittrex_markets = self.get_bittrex_markets()
+
+        bal = self.get_balances(
+            bittrex_balances=bittrex_balances, btc_usd=btc_usd)
+        cap = self.get_capping(
+            market_data=market_data, bittrex_markets=bittrex_markets)
+        portfolio_btc_value = self.get_btc_value(
+            bittrex_balances=bittrex_balances)
+
         df = pd.concat([bal, cap], axis=1)
+
         df['current_weight'].fillna(0, inplace=True)
         df['weight'].fillna(0, inplace=True)
         df['weight_diff'] = df['weight'] - df['current_weight']
-        return df.sort_values(by='weight', ascending=False)
+        df['order_type'] = df['weight_diff'].apply(
+            lambda x: 'BUY' if x > 0 else ('SELL' if x < 0 else None))
+        df['order_BTC_quantity'] = abs(df['weight_diff'] * portfolio_btc_value)
+        df['order_quantity'] = df['order_BTC_quantity'] / \
+            df['BTC_value'] * df['available']
+
+        return df.sort_values(by='BTC_value', ascending=False)[[
+            'available', 'BTC_value', 'order_type',
+            'order_quantity', 'order_BTC_quantity'
+        ]]
