@@ -3,3 +3,5 @@ __pycache__
 *.sqlite
 .DS_Store
 .ipynb*
+.venv
+.idea
