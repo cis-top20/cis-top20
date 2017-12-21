@@ -1,5 +1,5 @@
 import pandas as pd
-from capping import capping
+from cis.lib import capping
 from coinmarketcap import Market
 from bittrex import Bittrex, API_V2_0, API_V1_1
 

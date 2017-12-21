@@ -1,4 +1,4 @@
-from bittrex_portfolio import BittrexPortfolio
+from cis import BittrexPortfolio
 
 portfolio = BittrexPortfolio()
 balance_df = portfolio.get_balances()
