@@ -21,6 +21,7 @@ blacklist = pd.Series(['BCC', 'USDT'])
 # create dataframe from coinmarketcap data
 df = pd.DataFrame(data)
 
+
 # remove blacklist coins and coins not in bittrex from dataframe
 df = df.loc[df['symbol'].isin(bittrex_coins) & ~df['symbol'].isin(blacklist), :]
 
@@ -34,4 +35,35 @@ df['weight'] = df['market_cap_usd']/df['market_cap_usd'].sum()
 # compute capped weights
 capped = capping(df, 0.1, weight_column='weight')
 
+print('Bittrex')
+print(capped.loc[:, ['symbol', 'name', 'weight']])
+
+
+## binance
+from binance.client import Client
+my_binance = Client(None, None)
+
+# binance markets
+binance_markets = my_binance.get_products()
+
+binance_coins = pd.Series(list(set([p['baseAsset'] for p in binance_markets['data']])))
+binance_coins = binance_coins.replace('IOTA', 'MIOTA')
+
+# create dataframe from coinmarketcap data
+df = pd.DataFrame(data)
+
+# remove blacklist coins and coins not in bittrex from dataframe
+df = df.loc[df['symbol'].isin(binance_coins) & ~df['symbol'].isin(blacklist), :]
+
+# get top 20
+df = df.head(20)
+
+# compute market weights
+df['market_cap_usd'] = df['market_cap_usd'].astype(float)
+df['weight'] = df['market_cap_usd']/df['market_cap_usd'].sum()
+
+# compute capped weights
+capped = capping(df, 0.1, weight_column='weight')
+
+print('Binance')
 print(capped.loc[:, ['symbol', 'name', 'weight']])
