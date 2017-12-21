@@ -4,6 +4,7 @@ from coinmarketcap import Market
 from bittrex.bittrex import Bittrex, API_V2_0, API_V1_1
 
 from .capping import capping
+from .mappings import mapping
 
 
 def get_balance_list(balances):
@@ -116,6 +117,7 @@ class BittrexPortfolio(object):
         bittrex_coins = bittrex_markets.loc[
             bittrex_markets['BaseCurrency'] == 'BTC']['MarketCurrency']
         bittrex_coins = bittrex_coins.append(pd.Series('BTC'))
+        bittrex_coins.replace(mapping['bittrex'], inplace=True)
 
         df = pd.DataFrame(market_data)
         df = df.loc[
@@ -124,16 +126,13 @@ class BittrexPortfolio(object):
 
         df = df.head(self.n_coins)
 
-        # TODO: create a mapping of the coin symbols somewhere
-        df['symbol'] = df['symbol'].apply(lambda x: x if x != 'BCH' else 'BCC')
-
         # compute market weights
         df['market_cap_usd'] = df['market_cap_usd'].astype(float)
         df['weight'] = df['market_cap_usd']/df['market_cap_usd'].sum()
 
         # compute capped weights
         capped = capping(df, self.cap, weight_column='weight')
-        return capped[['symbol', 'weight']].set_index('symbol')
+        return capped[['symbol', 'price_btc', 'weight']].set_index('symbol')
 
     def check_rebalancing(
             self, bittrex_balances=None, btc_usd=None,
@@ -166,7 +165,7 @@ class BittrexPortfolio(object):
             df['BTC_value'] * df['available']
 
         return df.sort_values(by='BTC_value', ascending=False)[[
-            'available', 'BTC_value', 'order_type',
+            'available', 'price_btc', 'BTC_value', 'order_type',
             'order_quantity', 'order_BTC_quantity'
         ]]
 
