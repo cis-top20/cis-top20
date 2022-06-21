@@ -2,7 +2,7 @@ certifi==2017.11.5
 chardet==3.0.4
 coinmarketcap==4.1.1
 idna==2.6
-numpy==1.13.3
+numpy==1.22.0
 pandas==0.21.0
 python-bittrex==0.2.2
 python-dateutil==2.6.1
